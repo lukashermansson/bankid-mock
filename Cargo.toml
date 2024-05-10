@@ -29,6 +29,7 @@ itertools = { version = "0.12.1", optional = false }
 toml = { version = "0.8", optional = true }
 leptos_server_signal = "0.6"
 rand = "0.8"
+leptos-use = { version= "0.10.9", features = [ "serde"] }
 
 [features]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
@@ -46,6 +47,8 @@ ssr = [
     "dep:tracing",
     "dep:axum-client-ip",
     "dep:toml",
+"leptos-use/ssr",
+"leptos-use/axum",
 ]
 
 # Defines a size-optimized profile for the WASM bundle in release mode

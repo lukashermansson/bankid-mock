@@ -8,6 +8,8 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_server_signal::create_server_signal;
+use leptos_use::use_cookie;
+use leptos_use::utils::JsonCodec;
 use rand::distributions::Slice;
 use rand::distributions::{Distribution, Uniform};
 use serde::Deserialize;
@@ -328,16 +330,19 @@ fn RenderOrder(
     let (ssn, set_ssn) = create_signal("".to_string());
     let (name, set_name) = create_signal("".to_string());
     let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-    let (offset, set_offset) = create_signal(UtcOffset::from_hms(0, 0, 0).unwrap());
+    let (offset, set_offset) = use_cookie::<UtcOffset, JsonCodec>("offset");
+    if offset.get().is_none() {
+        (move || set_offset.set(Some(UtcOffset::from_hms(0, 0, 0).unwrap())))();
+    }
     create_effect(move |_| {
         let date = Date::new_0();
         let offset = date.get_timezone_offset();
-        set_offset.set(UtcOffset::from_whole_seconds(-(offset.round() as i32 * 60)).unwrap());
+        set_offset.set(Some(UtcOffset::from_whole_seconds(-(offset.round() as i32 * 60)).unwrap()));
     });
     view! {
         <tr>
             <td>{move || id.get().to_string()}</td>
-            <td>{move || time.to_offset(offset.get()).format(&format).unwrap()}</td>
+            <td>{move || time.to_offset(offset.get().unwrap()).format(&format).unwrap()}</td>
             <td>
                 <ActionForm
                     action=complete_order
