@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use crate::error_template::{AppError, ErrorTemplate};
-use crate::QuickUser;
+use crate::{PendingCode, QuickUser};
 use itertools::Itertools;
 use js_sys::Date;
 use leptos::*;
@@ -14,6 +14,7 @@ use rand::distributions::Slice;
 use rand::distributions::{Distribution, Uniform};
 use serde::Deserialize;
 use serde::Serialize;
+use strum::IntoEnumIterator;
 use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
@@ -184,10 +185,18 @@ fn GetByAlias() -> impl IntoView {
             <div>
                 {move || {
                     let firstnames = Signal::derive(move || {
-                        first_and_lastnames.get().map(|p| p).map(|k| k.unwrap().0).unwrap_or_default()
+                        first_and_lastnames
+                            .get()
+                            .map(|p| p)
+                            .map(|k| k.unwrap().0)
+                            .unwrap_or_default()
                     });
                     let lastnames = Signal::derive(move || {
-                        first_and_lastnames.get().map(|p| p).map(|k| k.unwrap().1).unwrap_or_default()
+                        first_and_lastnames
+                            .get()
+                            .map(|p| p)
+                            .map(|k| k.unwrap().1)
+                            .unwrap_or_default()
                     });
                     orders
                         .get()
@@ -213,7 +222,7 @@ fn GetByAlias() -> impl IntoView {
                                                     .map(|n| {
                                                         view! {
                                                             <RenderOrder
-                                                                id=n.1.to_string()
+                                                                id=n.1
                                                                 time=n.0
                                                                 quick_users=quick_users
                                                                 first_names=firstnames
@@ -264,10 +273,18 @@ fn GetByIP() -> impl IntoView {
             <div>
                 {move || {
                     let firstnames = Signal::derive(move || {
-                        first_and_lastnames.get().map(|p| p).map(|k| k.unwrap().0).unwrap_or_default()
+                        first_and_lastnames
+                            .get()
+                            .map(|p| p)
+                            .map(|k| k.unwrap().0)
+                            .unwrap_or_default()
                     });
                     let lastnames = Signal::derive(move || {
-                        first_and_lastnames.get().map(|p| p).map(|k| k.unwrap().1).unwrap_or_default()
+                        first_and_lastnames
+                            .get()
+                            .map(|p| p)
+                            .map(|k| k.unwrap().1)
+                            .unwrap_or_default()
                     });
                     orders_resource
                         .get()
@@ -281,6 +298,7 @@ fn GetByIP() -> impl IntoView {
                                             <thead>
                                                 <tr>
                                                     <th>Id</th>
+                                                    <th>status</th>
                                                     <th>time</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -293,7 +311,7 @@ fn GetByIP() -> impl IntoView {
                                                     .map(|n| {
                                                         view! {
                                                             <RenderOrder
-                                                                id=n.1.to_string()
+                                                                id=n.1
                                                                 time=n.0
                                                                 quick_users=quick_users
                                                                 first_names=firstnames
@@ -320,13 +338,13 @@ fn GetByIP() -> impl IntoView {
 #[component]
 fn RenderOrder(
     time: OffsetDateTime,
-    id: String,
+    id: Uuid,
     quick_users: Signal<Vec<QuickUser>>,
     first_names: Signal<Vec<String>>,
     last_names: Signal<Vec<String>>,
 ) -> impl IntoView {
     let complete_order = create_server_action::<CompleteOrder>();
-    let (id, _) = create_signal(id.to_string());
+    let (id, _) = create_signal(id);
     let (ssn, set_ssn) = create_signal("".to_string());
     let (name, set_name) = create_signal("".to_string());
     let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
@@ -342,13 +360,37 @@ fn RenderOrder(
     view! {
         <tr>
             <td>{move || id.get().to_string()}</td>
+            <td>
+                <form>
+                    <select class="form-select" aria-label="Default select example">
+                        {move || {
+                            PendingCode::iter()
+                                .map(|i| {
+                                    let i2 = i.clone();
+                                    let id = id.get().clone();
+                                    view! {
+                                        <option on:click=move |p| {
+                                            let id = id.clone();
+                                            let i2 = i2.clone();
+                                            spawn_local(async move {
+                                                update_pending_status(id, i2.clone()).await;
+                                            });
+                                        }>{format!("{:?}", &i)}</option>
+                                    }
+                                })
+                                .collect_view()
+                        }}
+
+                    </select>
+                </form>
+            </td>
             <td>{move || time.to_offset(offset.get().unwrap()).format(&format).unwrap()}</td>
             <td>
                 <ActionForm
                     action=complete_order
                     class="row row-cols-lg-auto g-3 align-items-center"
                 >
-                    <input type="text" name="id" value=move || id.get() hidden/>
+                    <input type="text" name="id" value=move || id.get().to_string() hidden/>
                     <div class="col-12">
                         <label class="visually-hidden" for=move || format!("ssn-{}", id.get())>
                             Ssn
@@ -451,7 +493,12 @@ fn RenderOrder(
                         view! {
                             <ActionForm action=complete_order class="d-inline-block">
 
-                                <input type="text" name="id" value=move || id.get() hidden/>
+                                <input
+                                    type="text"
+                                    name="id"
+                                    value=move || id.get().to_string()
+                                    hidden
+                                />
                                 <input name="ssn" value=p.ssn.to_string() hidden/>
                                 <input name="name" value=p.name.to_string() hidden/>
                                 <input
@@ -601,6 +648,17 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
         },
     );
     sender.send(()).unwrap();
+
+    Ok(())
+}
+#[server(UpdatePendingStatus, "/api")]
+pub async fn update_pending_status(id: Uuid, status: PendingCode) -> Result<(), ServerFnError> {
+
+    let orders = use_context::<crate::Orders>().ok_or_else(|| {
+        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
+    })?;
+    let mut ord = orders.lock().unwrap();
+    ord.set_pending_status(id, status);
 
     Ok(())
 }

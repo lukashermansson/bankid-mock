@@ -1,3 +1,4 @@
+use core::panic;
 use std::borrow::Borrow;
 use std::ops::Deref;
 use std::{collections::HashMap, net::IpAddr, sync::Mutex};
@@ -5,6 +6,7 @@ use std::{collections::HashMap, net::IpAddr, sync::Mutex};
 use serde::Deserialize;
 use serde::Serialize;
 
+use strum::EnumIter;
 use time::Duration;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -63,7 +65,7 @@ pub struct Order {
 }
 #[derive(PartialEq, Debug)]
 pub enum OrderEnum {
-    Pending,
+    Pending(PendingData),
     Completed(UserCompletionData),
     Expired,
 }
@@ -86,7 +88,9 @@ impl OrderData {
             Order {
                 ip,
                 order_time: OffsetDateTime::now_utc(),
-                data: OrderEnum::Pending,
+                data: OrderEnum::Pending(PendingData {
+                    status: PendingCode::Started,
+                }),
             },
         );
     }
@@ -96,13 +100,21 @@ impl OrderData {
         slot.data = OrderEnum::Completed(data);
     }
 
+    pub fn set_pending_status(&mut self, id: uuid::Uuid, status: PendingCode) {
+        let slot = self.data.get_mut(&id).unwrap();
+        match &mut slot.data {
+            OrderEnum::Pending(ref mut o) => o.status = status,
+            _ => panic!("Crash"),
+        }
+    }
+
     pub fn get(&self, id: &uuid::Uuid) -> Option<&OrderEnum> {
         self.data.get(&id).map(|p| &p.data)
     }
     pub fn get_ips(&self) -> Vec<IpAddr> {
         self.data
             .iter()
-            .filter(|o| o.1.data == OrderEnum::Pending)
+            .filter(|o| matches!(o.1.data, OrderEnum::Pending(_)))
             .map(|o| &o.1.ip)
             .cloned()
             .unique()
@@ -112,7 +124,7 @@ impl OrderData {
     pub fn remove_old(&mut self) -> u32 {
         let now = OffsetDateTime::now_utc();
         let condition = |a: (&Uuid, &Order)| {
-            a.1.data == OrderEnum::Pending
+            matches!(a.1.data, OrderEnum::Pending(_))
                 && a.1.order_time.saturating_add(Duration::seconds(50)) < now
         };
         let old_count = self.data.iter().filter(|(a, b)| condition((a, b))).count();
@@ -129,7 +141,7 @@ impl OrderData {
     pub fn get_all(&self, ip: &IpAddr) -> Vec<(OffsetDateTime, Uuid)> {
         self.data
             .iter()
-            .filter(|o| &o.1.data == &OrderEnum::Pending)
+            .filter(|o| matches!(o.1.data, OrderEnum::Pending(_)))
             .filter(|o| &o.1.ip == ip)
             .map(|o| (o.1.order_time.clone(), o.0.clone()))
             .collect()
@@ -147,6 +159,21 @@ impl Clone for ConfigState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingData {
+    pub status: PendingCode,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, EnumIter)]
+#[serde(rename_all = "camelCase")]
+pub enum PendingCode {
+    Started,
+    UserCallConfirm,
+    UserSign,
+    UserMrtd,
+    NoClient,
+    OutstandingTransaction,
+}
 #[derive(Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UserCompletionData {

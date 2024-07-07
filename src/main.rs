@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use bankid_mock::{app::App, ConfigState, DeviceCompletionData, Orders, UserCompletionData};
+use bankid_mock::{app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData};
 use core::net::SocketAddr;
 use leptos::provide_context;
 use leptos_axum::handle_server_fns_with_context;
@@ -152,19 +152,19 @@ async fn collect(
         Some(OrderEnum::Expired) => Json(CollectResponse {
             order_ref: options.order_ref.clone().into(),
             status: StatusEnum::Failed,
-            hint_code: Some(HintCode::Started),
+            hint_code: Some(HintCodes::Failed(FailedHintCodes::ExpiredTransaction)),
             completion_data: None,
         }),
-        Some(OrderEnum::Pending) => Json(CollectResponse {
+        Some(OrderEnum::Pending(o)) => Json(CollectResponse {
             order_ref: options.order_ref.clone().into(),
             status: StatusEnum::Pending,
-            hint_code: Some(HintCode::Started),
+            hint_code: Some(HintCodes::Pending(o.status.clone())),
             completion_data: None,
         }),
         None => Json(CollectResponse {
             order_ref: options.order_ref.clone().into(),
             status: StatusEnum::Pending,
-            hint_code: Some(HintCode::Started),
+            hint_code: Some(HintCodes::Pending(PendingCode::Started)),
             completion_data: None,
         }),
     }
@@ -189,10 +189,17 @@ pub struct AuthResponse {
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(untagged)]
+pub enum HintCodes {
+    Pending(PendingCode),
+    Failed(FailedHintCodes) 
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CollectResponse {
     order_ref: String,
     status: StatusEnum,
-    hint_code: Option<HintCode>,
+    hint_code: Option<HintCodes>,
     completion_data: Option<CompletionData>,
 }
 #[derive(Serialize)]
@@ -207,11 +214,10 @@ pub struct CompletionData {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum HintCode {
-    Started,
-    ExpiredTransaction,
-}
+pub enum FailedHintCodes {
+ExpiredTransaction
 
+}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StatusEnum {

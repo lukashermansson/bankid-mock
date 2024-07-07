@@ -24,6 +24,7 @@ time = {version ="0.3", features=["serde", "formatting", "macros"]}
 thiserror = "1"
 tracing = { version = "0.1", optional = true }
 http = "1"
+strum = { version = "0.26", features = ["derive"] }
 axum-client-ip = { version = "0.6.0", optional = true  }
 itertools = { version = "0.12.1", optional = false }
 toml = { version = "0.8", optional = true }
