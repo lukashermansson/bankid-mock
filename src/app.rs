@@ -2,14 +2,15 @@ use std::net::IpAddr;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use crate::{PendingCode, QuickUser};
+use either::EitherOf3;
 use itertools::Itertools;
 use js_sys::Date;
 use leptos::*;
+use leptos::prelude::*;
 use leptos_meta::*;
-use leptos_router::*;
-use leptos_server_signal::create_server_signal;
+use leptos_ws::ServerSignal;
 use leptos_use::use_cookie;
-use leptos_use::utils::JsonCodec;
+use leptos_router::components::*;
 use rand::distributions::Slice;
 use rand::distributions::{Distribution, Uniform};
 use serde::Deserialize;
@@ -18,16 +19,23 @@ use strum::IntoEnumIterator;
 use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
+use codee::string::{JsonSerdeCodec, JsonSerdeWasmCodec};
+ use leptos_router::hooks::use_params_map;
+use leptos::task::spawn_local;
+use leptos_router::path;
 
 #[component]
 pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
-    leptos_server_signal::provide_websocket("/ws").unwrap();
+    leptos_ws::provide_websocket("/ws");
+
     view! {
         <Stylesheet id="leptos" href="/pkg/bankid-mock.css"/>
         <Meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <Html lang="en" attr:data-bs-theme="dark"/>
+        <Html 
+            {..}
+            lang="en" attr:data-bs-theme="dark"/>
         <Link
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
             rel="stylesheet"
@@ -39,17 +47,17 @@ pub fn App() -> impl IntoView {
         <Title text="Bank-id mock"/>
 
         // content for this welcome page
-        <Router fallback=|| {
-            let mut outside_errors = Errors::default();
-            outside_errors.insert_with_default_key(AppError::NotFound);
-            view! { <ErrorTemplate outside_errors/> }.into_view()
-        }>
+        <Router>
             <main>
                 <Navbar/>
-                <Routes>
-                    <Route path="" view=ListAllPlacesWithActiveOrders/>
-                    <Route path="/by-ip/:ip" view=GetByIP/>
-                    <Route path="/by-alias/:alias" view=GetByAlias/>
+                <Routes fallback=|| {
+            let mut outside_errors = Errors::default();
+            outside_errors.insert_with_default_key(AppError::NotFound);
+            view! { <ErrorTemplate outside_errors/> }.into_any()
+        }>
+                    <Route path=path!("/") view=ListAllPlacesWithActiveOrders/>
+                    <Route path=path!("/by-ip/:ip") view=GetByIP/>
+                    <Route path=path!("/by-alias/:alias") view=GetByAlias/>
                 </Routes>
             </main>
         </Router>
@@ -63,13 +71,13 @@ pub fn App() -> impl IntoView {
 
 #[component]
 fn Navbar() -> impl IntoView {
-    let aliases = create_resource(|| (), |_| get_aliases());
+    let aliases = Resource::new(|| (), |_| async move { get_aliases().await });
 
     view! {
-        <Suspense>
+        <Transition>
             <nav class="navbar navbar-expand-lg ">
                 <div class="container-fluid">
-                    <A class="navbar-brand" href="/">
+                    <A  href="/" {..} class="navbar-brand">
                         Bank-id mock
                     </A>
                     <button
@@ -85,43 +93,40 @@ fn Navbar() -> impl IntoView {
                     </button>
                     <div class="collapse navbar-collapse" id="navbarScroll">
                         <ul class="navbar-nav me-auto my-2 my-lg-0">
-                            {move || match aliases.get() {
-                                Some(Ok(o)) => {
-                                    o.into_iter()
+                            {move || aliases.get().map(|o| {
+        o.unwrap().into_iter()
                                         .map(|n| {
                                             view! {
                                                 <li class="nav-item">
-                                                    <A class="nav-link" href=format!("/by-alias/{}", n)>
+                                                    <A href=format!("/by-alias/{}", n) {..} class="nav-link">
                                                         {n}
                                                     </A>
                                                 </li>
                                             }
-                                        })
-                                        .collect_view()
+                                        }).collect_view()})
+
                                 }
-                                Some(Err(o)) => view! { <p>{o.to_string()}</p> }.into_view(),
-                                _ => view! { <p>Loading ...</p> }.into_view(),
-                            }}
 
                         </ul>
                     </div>
                 </div>
             </nav>
-        </Suspense>
+        </Transition>
     }
 }
 
 #[component]
 fn ListAllPlacesWithActiveOrders() -> impl IntoView {
-    let count = create_server_signal::<Count>("counter");
-    let ips = create_resource(count, |_| get_ips());
+    let count = ServerSignal::new("counter".to_string(), 1).unwrap();
+
+    let count = move || count.get();
+    let ips = Resource::new(count, |_| get_ips());
 
     view! {
         <Suspense>
             <div>
-                {move || match ips.get() {
-                    Some(Ok(o)) => {
-                        view! {
+                {move || ips.get().map(|o|{
+view! {
                             <table class="table">
                                 <thead>
                                     <tr>
@@ -129,7 +134,7 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {o
+                                    {o.unwrap()
                                         .into_iter()
                                         .map(|n| match n {
                                             IpEntry::JustIp(n) => {
@@ -157,13 +162,8 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
                                         .collect_view()}
                                 </tbody>
                             </table>
-                        }
-                            .into_view()
-                    }
-                    Some(Err(o)) => view! { <p>{o.to_string()}</p> }.into_view(),
-                    _ => view! { <p>"Loading..."</p> }.into_view(),
-                }}
-
+}})}
+                    
             </div>
         </Suspense>
     }
@@ -171,14 +171,16 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn GetByAlias() -> impl IntoView {
-    let count = create_server_signal::<Count>("counter");
+    leptos_ws::provide_websocket("/ws");
+    let count = ServerSignal::new("counter".to_string(), 1).unwrap();
     let params = use_params_map();
-    let alias = move || params.with(|params| params.get("alias").cloned().unwrap_or_default());
-    let orders = create_resource(
-        move || (alias(), count.get()),
+    let alias = move || params.with(|params| params.get("alias").unwrap_or_default());
+    let count = move || count.get();
+    let orders = Resource::new(
+        move || (alias(), count()),
         |(alias, _count)| get_orders_by_alias(alias),
     );
-    let first_and_lastnames = create_resource(move || (), |_| get_first_and_lastname_options());
+    let first_and_lastnames =  Resource::new(move || (), |_| get_first_and_lastname_options());
 
     view! {
         <Suspense>
@@ -234,9 +236,9 @@ fn GetByAlias() -> impl IntoView {
                                             </tbody>
                                         </table>
                                     }
-                                        .into_view()
+                                        .into_any()
                                 }
-                                Err(o) => view! { <p>{o.to_string()}</p> }.into_view(),
+                                Err(o) => view! { <p>{o.to_string()}</p> }.into_any(),
                             }
                         })
                 }}
@@ -249,21 +251,21 @@ fn GetByAlias() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn GetByIP() -> impl IntoView {
-    let count = create_server_signal::<Count>("counter");
+    let count = ServerSignal::new("counter".to_string(), 0).unwrap();
     let params = use_params_map();
     let ip = move || {
         params.with(|params| {
             params
                 .get("ip")
-                .cloned()
                 .unwrap_or_default()
                 .parse::<IpAddr>()
                 .unwrap()
         })
     };
+    let count = move || count.get();
     let orders_resource =
-        create_resource(move || (ip(), count.get()), |(ip, _count)| get_orders(ip));
-    let first_and_lastnames = create_resource(
+        Resource::new(move || (ip(), count()), |(ip, _count)| get_orders(ip));
+    let first_and_lastnames = Resource::new(
         || (),
         |_| async move { get_first_and_lastname_options().await },
     );
@@ -323,9 +325,9 @@ fn GetByIP() -> impl IntoView {
                                             </tbody>
                                         </table>
                                     }
-                                        .into_view()
+                                        .into_any()
                                 }
-                                Err(o) => view! { <p>{o.to_string()}</p> }.into_view(),
+                                Err(o) => view! { <p>{o.to_string()}</p> }.into_any(),
                             }
                         })
                 }}
@@ -343,16 +345,16 @@ fn RenderOrder(
     first_names: Signal<Vec<String>>,
     last_names: Signal<Vec<String>>,
 ) -> impl IntoView {
-    let complete_order = create_server_action::<CompleteOrder>();
+    let complete_order = ServerAction::<CompleteOrder>::new();
     let (id, _) = create_signal(id);
     let (ssn, set_ssn) = create_signal("".to_string());
     let (name, set_name) = create_signal("".to_string());
     let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-    let (offset, set_offset) = use_cookie::<UtcOffset, JsonCodec>("offset");
+    let (offset, set_offset) = use_cookie::<UtcOffset, JsonSerdeCodec>("offset");
     if offset.get().is_none() {
         (move || set_offset.set(Some(UtcOffset::from_hms(0, 0, 0).unwrap())))();
     }
-    create_effect(move |_| {
+    Effect::new(move |_| {         
         let date = Date::new_0();
         let offset = date.get_timezone_offset();
         set_offset.set(Some(UtcOffset::from_whole_seconds(-(offset.round() as i32 * 60)).unwrap()));
@@ -388,7 +390,7 @@ fn RenderOrder(
             <td>
                 <ActionForm
                     action=complete_order
-                    class="row row-cols-lg-auto g-3 align-items-center"
+                    // {..} class="row row-cols-lg-auto g-3 align-items-center"
                 >
                     <input type="text" name="id" value=move || id.get().to_string() hidden/>
                     <div class="col-12">
@@ -427,23 +429,20 @@ fn RenderOrder(
                         <div class="input-group">
 
                             {move || {
-                                let has_any = with!(
-                                    | first_names, last_names | { first_names.iter().count() > 0 &&
-                                    last_names.iter().count() > 0 }
-                                );
+                                let has_any = first_names.get().iter().count() > 0 && last_names.get().iter().count() > 0;
                                 if has_any {
                                     view! {
                                         <button
                                             class="btn btn-outline-secondary"
                                             type="button"
                                             on:click=move |_| {
-                                                let name = with!(
-                                                    | first_names, last_names | { let first_names : Vec < _ > =
-                                                    first_names.iter().map(| s | s.as_str()).collect(); let
-                                                    last_names : Vec < _ > = last_names.iter().map(| s | s
-                                                    .as_str()).collect(); generate_random_name(first_names
-                                                    .as_slice(), last_names.as_slice()) }
-                                                );
+                                            let first_names = first_names.get();
+                                            let last_names = last_names.get();
+                                            let first_names : Vec < _ > =
+                                                    first_names.iter().map(| s | s.as_str()).collect(); 
+                                            let last_names : Vec < _ > = last_names.iter().map(| s | s
+                                                    .as_str()).collect(); 
+                                            let name = generate_random_name(first_names .as_slice(), last_names.as_slice()) ;
                                                 set_name(name);
                                             }
                                         >
@@ -451,9 +450,9 @@ fn RenderOrder(
                                             "Randomize"
                                         </button>
                                     }
-                                        .into_view()
+                                        .into_any()
                                 } else {
-                                    view! {}.into_view()
+                                    view! {}.into_any()
                                 }
                             }}
                             <input
@@ -491,7 +490,9 @@ fn RenderOrder(
                     .into_iter()
                     .map(|p| {
                         view! {
-                            <ActionForm action=complete_order class="d-inline-block">
+                            <ActionForm action=complete_order 
+                                            // {..} class="d-inline-block"
+                                            >
 
                                 <input
                                     type="text"
@@ -513,7 +514,6 @@ fn RenderOrder(
 
                             </ActionForm>
                         }
-                            .into_view()
                     })
                     .collect_view()}
 
@@ -589,7 +589,7 @@ pub async fn get_aliases() -> Result<Vec<String>, ServerFnError> {
     let alias_names = aliases.iter().map(|f| f.name.clone()).collect();
     Ok(alias_names)
 }
-#[server(GetIps, "/api")]
+#[server]
 pub async fn get_ips() -> Result<Vec<IpEntry>, ServerFnError> {
     let orders = use_context::<crate::Orders>().ok_or_else(|| {
         ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
@@ -623,15 +623,14 @@ pub enum IpEntry {
     Alias(String),
 }
 
-#[server(CompleteOrder, "/api")]
+#[server]
 pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), ServerFnError> {
     use tokio::sync::broadcast::Sender;
     let orders = use_context::<crate::Orders>().ok_or_else(|| {
         ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
     })?;
-    let sender = use_context::<Sender<()>>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("sender missing.".into())
-    })?;
+
+    let count = ServerSignal::new("counter".to_string(), 9).unwrap();
 
     let mut ord = orders.lock().unwrap();
     let new_name = name.clone();
@@ -647,11 +646,11 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
             sur_name: surname.to_string(),
         },
     );
-    sender.send(()).unwrap();
+    count.update(|x| *x += 1);
 
     Ok(())
 }
-#[server(UpdatePendingStatus, "/api")]
+#[server]
 pub async fn update_pending_status(id: Uuid, status: PendingCode) -> Result<(), ServerFnError> {
 
     let orders = use_context::<crate::Orders>().ok_or_else(|| {
