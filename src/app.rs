@@ -2,7 +2,6 @@ use std::net::IpAddr;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use crate::{PendingCode, QuickUser};
-use either::EitherOf3;
 use itertools::Itertools;
 use js_sys::Date;
 use leptos::*;
@@ -19,7 +18,7 @@ use strum::IntoEnumIterator;
 use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
-use codee::string::{JsonSerdeCodec, JsonSerdeWasmCodec};
+use codee::string::JsonSerdeCodec;
  use leptos_router::hooks::use_params_map;
 use leptos::task::spawn_local;
 use leptos_router::path;
@@ -31,11 +30,9 @@ pub fn App() -> impl IntoView {
     leptos_ws::provide_websocket("/ws");
 
     view! {
-        <Stylesheet id="leptos" href="/pkg/bankid-mock.css"/>
-        <Meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <Html 
-            {..}
-            lang="en" attr:data-bs-theme="dark"/>
+        <Stylesheet id="leptos" href="/pkg/bankid-mock.css" />
+        <Meta name="viewport" content="width=device-width, initial-scale=1" />
+        <Html {..} lang="en" attr:data-bs-theme="dark" />
         <Link
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
             rel="stylesheet"
@@ -44,20 +41,20 @@ pub fn App() -> impl IntoView {
         />
 
         // sets the document title
-        <Title text="Bank-id mock"/>
+        <Title text="Bank-id mock" />
 
         // content for this welcome page
         <Router>
             <main>
-                <Navbar/>
+                <Navbar />
                 <Routes fallback=|| {
-            let mut outside_errors = Errors::default();
-            outside_errors.insert_with_default_key(AppError::NotFound);
-            view! { <ErrorTemplate outside_errors/> }.into_any()
-        }>
-                    <Route path=path!("/") view=ListAllPlacesWithActiveOrders/>
-                    <Route path=path!("/by-ip/:ip") view=GetByIP/>
-                    <Route path=path!("/by-alias/:alias") view=GetByAlias/>
+                    let mut outside_errors = Errors::default();
+                    outside_errors.insert_with_default_key(AppError::NotFound);
+                    view! { <ErrorTemplate outside_errors /> }.into_any()
+                }>
+                    <Route path=path!("/") view=ListAllPlacesWithActiveOrders />
+                    <Route path=path!("/by-ip/:ip") view=GetByIP />
+                    <Route path=path!("/by-alias/:alias") view=GetByAlias />
                 </Routes>
             </main>
         </Router>
@@ -77,7 +74,7 @@ fn Navbar() -> impl IntoView {
         <Transition>
             <nav class="navbar navbar-expand-lg ">
                 <div class="container-fluid">
-                    <A  href="/" {..} class="navbar-brand">
+                    <A href="/" {..} class="navbar-brand">
                         Bank-id mock
                     </A>
                     <button
@@ -93,19 +90,24 @@ fn Navbar() -> impl IntoView {
                     </button>
                     <div class="collapse navbar-collapse" id="navbarScroll">
                         <ul class="navbar-nav me-auto my-2 my-lg-0">
-                            {move || aliases.get().map(|o| {
-        o.unwrap().into_iter()
-                                        .map(|n| {
-                                            view! {
-                                                <li class="nav-item">
-                                                    <A href=format!("/by-alias/{}", n) {..} class="nav-link">
-                                                        {n}
-                                                    </A>
-                                                </li>
-                                            }
-                                        }).collect_view()})
-
-                                }
+                            {move || {
+                                aliases
+                                    .get()
+                                    .map(|o| {
+                                        o.unwrap()
+                                            .into_iter()
+                                            .map(|n| {
+                                                view! {
+                                                    <li class="nav-item">
+                                                        <A href=format!("/by-alias/{}", n) {..} class="nav-link">
+                                                            {n}
+                                                        </A>
+                                                    </li>
+                                                }
+                                            })
+                                            .collect_view()
+                                    })
+                            }}
 
                         </ul>
                     </div>
@@ -125,45 +127,50 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
     view! {
         <Suspense>
             <div>
-                {move || ips.get().map(|o|{
-view! {
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Location</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {o.unwrap()
-                                        .into_iter()
-                                        .map(|n| match n {
-                                            IpEntry::JustIp(n) => {
-                                                view! {
-                                                    <tr>
-                                                        <td>
-                                                            <A href=format!(
-                                                                "/by-ip/{}",
-                                                                n.to_string(),
-                                                            )>{n.to_string()}</A>
-                                                        </td>
-                                                    </tr>
+                {move || {
+                    ips.get()
+                        .map(|o| {
+                            view! {
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Location</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {o
+                                            .unwrap()
+                                            .into_iter()
+                                            .map(|n| match n {
+                                                IpEntry::JustIp(n) => {
+                                                    view! {
+                                                        <tr>
+                                                            <td>
+                                                                <A href=format!(
+                                                                    "/by-ip/{}",
+                                                                    n.to_string(),
+                                                                )>{n.to_string()}</A>
+                                                            </td>
+                                                        </tr>
+                                                    }
                                                 }
-                                            }
-                                            IpEntry::Alias(alias) => {
-                                                view! {
-                                                    <tr>
-                                                        <td>
-                                                            <A href=format!("/by-alias/{}", alias)>{alias}</A>
-                                                        </td>
-                                                    </tr>
+                                                IpEntry::Alias(alias) => {
+                                                    view! {
+                                                        <tr>
+                                                            <td>
+                                                                <A href=format!("/by-alias/{}", alias)>{alias}</A>
+                                                            </td>
+                                                        </tr>
+                                                    }
                                                 }
-                                            }
-                                        })
-                                        .collect_view()}
-                                </tbody>
-                            </table>
-}})}
-                    
+                                            })
+                                            .collect_view()}
+                                    </tbody>
+                                </table>
+                            }
+                        })
+                }}
+
             </div>
         </Suspense>
     }
@@ -346,9 +353,9 @@ fn RenderOrder(
     last_names: Signal<Vec<String>>,
 ) -> impl IntoView {
     let complete_order = ServerAction::<CompleteOrder>::new();
-    let (id, _) = create_signal(id);
-    let (ssn, set_ssn) = create_signal("".to_string());
-    let (name, set_name) = create_signal("".to_string());
+    let (id, _) = signal(id);
+    let (ssn, set_ssn) = signal("".to_string());
+    let (name, set_name) = signal("".to_string());
     let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
     let (offset, set_offset) = use_cookie::<UtcOffset, JsonSerdeCodec>("offset");
     if offset.get().is_none() {
@@ -371,11 +378,11 @@ fn RenderOrder(
                                     let i2 = i.clone();
                                     let id = id.get().clone();
                                     view! {
-                                        <option on:click=move |p| {
+                                        <option on:click=move |_p| {
                                             let id = id.clone();
                                             let i2 = i2.clone();
                                             spawn_local(async move {
-                                                update_pending_status(id, i2.clone()).await;
+                                                update_pending_status(id, i2.clone()).await.unwrap();
                                             });
                                         }>{format!("{:?}", &i)}</option>
                                     }
@@ -388,11 +395,9 @@ fn RenderOrder(
             </td>
             <td>{move || time.to_offset(offset.get().unwrap()).format(&format).unwrap()}</td>
             <td>
-                <ActionForm
-                    action=complete_order
+                <ActionForm action=complete_order>
                     // {..} class="row row-cols-lg-auto g-3 align-items-center"
-                >
-                    <input type="text" name="id" value=move || id.get().to_string() hidden/>
+                    <input type="text" name="id" value=move || id.get().to_string() hidden />
                     <div class="col-12">
                         <label class="visually-hidden" for=move || format!("ssn-{}", id.get())>
                             Ssn
@@ -429,20 +434,28 @@ fn RenderOrder(
                         <div class="input-group">
 
                             {move || {
-                                let has_any = first_names.get().iter().count() > 0 && last_names.get().iter().count() > 0;
+                                let has_any = first_names.get().iter().count() > 0
+                                    && last_names.get().iter().count() > 0;
                                 if has_any {
                                     view! {
                                         <button
                                             class="btn btn-outline-secondary"
                                             type="button"
                                             on:click=move |_| {
-                                            let first_names = first_names.get();
-                                            let last_names = last_names.get();
-                                            let first_names : Vec < _ > =
-                                                    first_names.iter().map(| s | s.as_str()).collect(); 
-                                            let last_names : Vec < _ > = last_names.iter().map(| s | s
-                                                    .as_str()).collect(); 
-                                            let name = generate_random_name(first_names .as_slice(), last_names.as_slice()) ;
+                                                let first_names = first_names.get();
+                                                let last_names = last_names.get();
+                                                let first_names: Vec<_> = first_names
+                                                    .iter()
+                                                    .map(|s| s.as_str())
+                                                    .collect();
+                                                let last_names: Vec<_> = last_names
+                                                    .iter()
+                                                    .map(|s| s.as_str())
+                                                    .collect();
+                                                let name = generate_random_name(
+                                                    first_names.as_slice(),
+                                                    last_names.as_slice(),
+                                                );
                                                 set_name(name);
                                             }
                                         >
@@ -490,9 +503,8 @@ fn RenderOrder(
                     .into_iter()
                     .map(|p| {
                         view! {
-                            <ActionForm action=complete_order 
-                                            // {..} class="d-inline-block"
-                                            >
+                            <ActionForm action=complete_order>
+                                // {..} class="d-inline-block"
 
                                 <input
                                     type="text"
@@ -500,8 +512,8 @@ fn RenderOrder(
                                     value=move || id.get().to_string()
                                     hidden
                                 />
-                                <input name="ssn" value=p.ssn.to_string() hidden/>
-                                <input name="name" value=p.name.to_string() hidden/>
+                                <input name="ssn" value=p.ssn.to_string() hidden />
+                                <input name="name" value=p.name.to_string() hidden />
                                 <input
                                     type="submit"
                                     class="btn btn-link"
@@ -625,7 +637,6 @@ pub enum IpEntry {
 
 #[server]
 pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), ServerFnError> {
-    use tokio::sync::broadcast::Sender;
     let orders = use_context::<crate::Orders>().ok_or_else(|| {
         ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
     })?;

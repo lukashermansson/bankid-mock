@@ -33,8 +33,7 @@ rand = "0.8"
 codee = {version = "0.3", features= ["json_serde_wasm"]}
 leptos-use = { version= "0.15.6" }
 leptos_ws = "0.7.7"
-[patch.crates-io]
-leptos_ws = { path = "../leptos_ws" }
+
 [features]
 hydrate = ["leptos/hydrate",]
 ssr = [
@@ -47,11 +46,12 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
     "dep:tracing",
-"leptos_ws/ssr", "leptos_ws/axum",
+    "leptos_ws/ssr", 
+    "leptos_ws/axum",
     "dep:axum-client-ip",
     "dep:toml",
-"leptos-use/ssr",
-"leptos-use/axum",
+    "leptos-use/ssr",
+    "leptos-use/axum",
 ]
 
 # Defines a size-optimized profile for the WASM bundle in release mode

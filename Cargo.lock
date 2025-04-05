@@ -220,7 +220,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "axum-client-ip",
- "codee",
+ "codee 0.3.0",
  "console_error_panic_hook",
  "http",
  "itertools 0.12.1",
@@ -318,6 +318,17 @@ dependencies = [
  "num-traits",
  "wasm-bindgen",
  "windows-link",
+]
+
+[[package]]
+name = "codee"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d3ad3122b0001c7f140cf4d605ef9a9e2c24d96ab0b4fb4347b76de2425f445"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1276,7 +1287,7 @@ checksum = "e612389629007497d1e90deecf5bddd790e59e32358546fa7beaf88a68d2067b"
 dependencies = [
  "cfg-if",
  "chrono",
- "codee",
+ "codee 0.3.0",
  "cookie",
  "default-struct-builder",
  "futures-util",
@@ -1463,7 +1474,7 @@ checksum = "4fee9ed4526484b17561bc8ce1532c613e37be2c01788fed3d1c4104db674dd9"
 dependencies = [
  "any_spawner",
  "base64",
- "codee",
+ "codee 0.3.0",
  "futures",
  "hydration_context",
  "or_poisoned",
@@ -1478,10 +1489,12 @@ dependencies = [
 [[package]]
 name = "leptos_ws"
 version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5313b8f2a42d3a5cacb771b571b9d5ea0d60bfc2a3e90aeb5340250c4f352de"
 dependencies = [
  "async-trait",
  "axum",
- "codee",
+ "codee 0.2.0",
  "futures",
  "json-patch",
  "leptos",
