@@ -10,8 +10,9 @@ use leptos_meta::*;
 use leptos_ws::ServerSignal;
 use leptos_use::use_cookie;
 use leptos_router::components::*;
-use rand::distributions::Slice;
-use rand::distributions::{Distribution, Uniform};
+use rand::distr::slice::Choose;
+use rand::distr::{Distribution, Uniform};
+use rand::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 use strum::IntoEnumIterator;
@@ -19,7 +20,7 @@ use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
 use codee::string::JsonSerdeCodec;
- use leptos_router::hooks::use_params_map;
+use leptos_router::hooks::use_params_map;
 use leptos::task::spawn_local;
 use leptos_router::path;
 
@@ -679,11 +680,11 @@ pub struct Count {
 }
 
 fn generate_random_ssn() -> String {
-    let mut rng = rand::thread_rng();
-    let between = Uniform::from(1850..2000);
-    let month = Uniform::from(1..12);
-    let day = Uniform::from(1..25);
-    let number = Uniform::from(0..999);
+    let mut rng = rand::rng();
+    let between = Uniform::new(1850, 2000).unwrap();
+    let month = Uniform::new(1, 12).unwrap();
+    let day = Uniform::new(1, 25).unwrap();
+    let number = Uniform::new(0, 999).unwrap();
     let year = between.sample(&mut rng);
     let month = month.sample(&mut rng);
     let day = day.sample(&mut rng);
@@ -696,11 +697,11 @@ fn generate_random_ssn() -> String {
     format!("{}{}", whole, check_didgit)
 }
 fn generate_random_name(first_names: &[&str], last_names: &[&str]) -> String {
-    let mut rng = rand::thread_rng();
-    let first_names = Slice::new(first_names).unwrap();
+    let mut rng = rand::rng();
+    let first_names = Choose::new(first_names).unwrap();
     let first_name = first_names.sample(&mut rng);
 
-    let last_names = Slice::new(last_names).unwrap();
+    let last_names = Choose::new(last_names).unwrap();
     let last_name = last_names.sample(&mut rng);
     format!("{} {}", first_name, last_name)
 }
