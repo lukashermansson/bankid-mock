@@ -171,7 +171,7 @@ async fn auth(
     drop(guard);
     }
     let mut server_signals = state.server_signals.clone();
-    let signal  = server_signals.get_signal::<ServerSignal<i32>>("counter".to_string()).await.unwrap();
+    let signal = server_signals.get_signal::<ServerSignal<i32>>("counter".to_string()).await.unwrap();
     signal.update(|x| {
         *x += 1;
     });

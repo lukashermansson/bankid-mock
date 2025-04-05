@@ -12,7 +12,6 @@ use leptos_use::use_cookie;
 use leptos_router::components::*;
 use rand::distr::slice::Choose;
 use rand::distr::{Distribution, Uniform};
-use rand::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 use strum::IntoEnumIterator;
