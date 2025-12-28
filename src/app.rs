@@ -2,14 +2,17 @@ use std::net::IpAddr;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use crate::{PendingCode, QuickUser};
+use codee::string::JsonSerdeCodec;
 use itertools::Itertools;
 use js_sys::Date;
-use leptos::*;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_meta::*;
-use leptos_ws::ServerSignal;
-use leptos_use::use_cookie;
 use leptos_router::components::*;
+use leptos_router::hooks::use_params_map;
+use leptos_router::path;
+use leptos_use::use_cookie;
+use leptos_ws::ReadOnlySignal;
 use rand::distr::slice::Choose;
 use rand::distr::{Distribution, Uniform};
 use serde::Deserialize;
@@ -18,16 +21,12 @@ use strum::IntoEnumIterator;
 use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
-use codee::string::JsonSerdeCodec;
-use leptos_router::hooks::use_params_map;
-use leptos::task::spawn_local;
-use leptos_router::path;
 
 #[component]
 pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
-    leptos_ws::provide_websocket("/ws");
+    leptos_ws::provide_websocket();
 
     view! {
         <Stylesheet id="leptos" href="/pkg/bankid-mock.css" />
@@ -52,9 +51,13 @@ pub fn App() -> impl IntoView {
                     outside_errors.insert_with_default_key(AppError::NotFound);
                     view! { <ErrorTemplate outside_errors /> }.into_any()
                 }>
-                    <Route path=path!("/") view=ListAllPlacesWithActiveOrders />
-                    <Route path=path!("/by-ip/:ip") view=GetByIP />
-                    <Route path=path!("/by-alias/:alias") view=GetByAlias />
+                    <Route 
+                    path=path!("") 
+        view=ListAllPlacesWithActiveOrders />
+                    <Route 
+                    path=path!("by-ip/:ip") 
+                    view=GetByIP />
+                    <Route path=path!("by-alias/:alias") view=GetByAlias />
                 </Routes>
             </main>
         </Router>
@@ -119,7 +122,7 @@ fn Navbar() -> impl IntoView {
 
 #[component]
 fn ListAllPlacesWithActiveOrders() -> impl IntoView {
-    let count = ServerSignal::new("counter".to_string(), 1).unwrap();
+    let count = ReadOnlySignal::new("counter", 1).unwrap();
 
     let count = move || count.get();
     let ips = Resource::new(count, |_| get_ips());
@@ -178,8 +181,8 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn GetByAlias() -> impl IntoView {
-    leptos_ws::provide_websocket("/ws");
-    let count = ServerSignal::new("counter".to_string(), 1).unwrap();
+    leptos_ws::provide_websocket();
+    let count = ReadOnlySignal::new("counter", 1).unwrap();
     let params = use_params_map();
     let alias = move || params.with(|params| params.get("alias").unwrap_or_default());
     let count = move || count.get();
@@ -187,7 +190,7 @@ fn GetByAlias() -> impl IntoView {
         move || (alias(), count()),
         |(alias, _count)| get_orders_by_alias(alias),
     );
-    let first_and_lastnames =  Resource::new(move || (), |_| get_first_and_lastname_options());
+    let first_and_lastnames = Resource::new(move || (), |_| get_first_and_lastname_options());
 
     view! {
         <Suspense>
@@ -219,6 +222,7 @@ fn GetByAlias() -> impl IntoView {
                                             <thead>
                                                 <tr>
                                                     <th>Id</th>
+                                                    <th>status</th>
                                                     <th>time</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -258,7 +262,7 @@ fn GetByAlias() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn GetByIP() -> impl IntoView {
-    let count = ServerSignal::new("counter".to_string(), 0).unwrap();
+    let count = ReadOnlySignal::new("counter", 0).unwrap();
     let params = use_params_map();
     let ip = move || {
         params.with(|params| {
@@ -270,8 +274,7 @@ fn GetByIP() -> impl IntoView {
         })
     };
     let count = move || count.get();
-    let orders_resource =
-        Resource::new(move || (ip(), count()), |(ip, _count)| get_orders(ip));
+    let orders_resource = Resource::new(move || (ip(), count()), |(ip, _count)| get_orders(ip));
     let first_and_lastnames = Resource::new(
         || (),
         |_| async move { get_first_and_lastname_options().await },
@@ -361,10 +364,12 @@ fn RenderOrder(
     if offset.get().is_none() {
         (move || set_offset.set(Some(UtcOffset::from_hms(0, 0, 0).unwrap())))();
     }
-    Effect::new(move |_| {         
+    Effect::new(move |_| {
         let date = Date::new_0();
         let offset = date.get_timezone_offset();
-        set_offset.set(Some(UtcOffset::from_whole_seconds(-(offset.round() as i32 * 60)).unwrap()));
+        set_offset.set(Some(
+            UtcOffset::from_whole_seconds(-(offset.round() as i32 * 60)).unwrap(),
+        ));
     });
     view! {
         <tr>
@@ -641,7 +646,7 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
         ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
     })?;
 
-    let count = ServerSignal::new("counter".to_string(), 9).unwrap();
+    let count = ReadOnlySignal::new("counter", 9).unwrap();
 
     let mut ord = orders.lock().unwrap();
     let new_name = name.clone();
@@ -663,7 +668,6 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
 }
 #[server]
 pub async fn update_pending_status(id: Uuid, status: PendingCode) -> Result<(), ServerFnError> {
-
     let orders = use_context::<crate::Orders>().ok_or_else(|| {
         ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
     })?;

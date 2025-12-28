@@ -1,5 +1,7 @@
 use bankid_mock::{app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData};
 #[cfg(feature = "ssr")]
+use leptos_ws::WsSignals;
+#[cfg(feature = "ssr")]
 pub mod fileserv;
 #[cfg(feature = "ssr")]
 use crate::fileserv::file_and_error_handler;
@@ -31,10 +33,6 @@ use leptos_axum::LeptosRoutes;
 #[cfg(feature = "ssr")]
 use leptos_axum::{handle_server_fns_with_context, AxumRouteListing};
 #[cfg(feature = "ssr")]
-use leptos_ws::server_signals::ServerSignals;
-#[cfg(feature = "ssr")]
-use leptos_ws::ServerSignal;
-#[cfg(feature = "ssr")]
 use bankid_mock::OrderData;
 #[cfg(feature = "ssr")]
 use bankid_mock::Config;
@@ -52,6 +50,9 @@ use leptos_axum::generate_route_list;
 #[tokio::main]
 async fn main() {
     use std::net::SocketAddr;
+
+    use axum_client_ip::{ClientIp, ClientIpSource};
+    use leptos_ws::WsSignals;
 
     pub fn shell(options: LeptosOptions) -> impl IntoView {
         view! {
@@ -107,7 +108,7 @@ async fn main() {
         .await
     }
 
-    let server_signals = ServerSignals::new();
+    let server_signals = WsSignals::new();
     //let signal = ServerSignal::new("counter".to_string(), 1);
     // build our application with a route
     let conf = get_configuration(None).unwrap();
@@ -134,14 +135,11 @@ async fn main() {
         App,
     );    state.routes = Some(routes.clone());
     let app = Router::new()
-        .route("/api/*fn_name", get(server_fn_handler).post(server_fn_handler))
+        .route("/api/{*fn_name}", get(server_fn_handler).post(server_fn_handler))
         .route("/rp/v6.0/auth", axum::routing::post(auth))
         .route("/rp/v6.0/collect", axum::routing::post(collect))
-        .route(
-            "/ws",
-            get(leptos_ws::axum::websocket(state.server_signals.clone())),
-        )
         .leptos_routes_with_handler(routes, get(leptos_routes_handler))
+        .layer(ClientIpSource::ConnectInfo.into_extension())
         .fallback(file_and_error_handler)
         .with_state(state);
     // run our app with hyper
@@ -160,8 +158,10 @@ async fn main() {
 #[cfg(feature = "ssr")]
 async fn auth(
     axum::extract::State(state): axum::extract::State<AppState>,
-    insecure_ip: axum_client_ip::InsecureClientIp,
+    insecure_ip: axum_client_ip::ClientIp,
 ) -> Json<AuthResponse> {
+    use leptos_ws::ReadOnlySignal;
+
     let uid = uuid::Uuid::new_v4();
     let ip = insecure_ip.0;
 {
@@ -171,7 +171,7 @@ async fn auth(
     drop(guard);
     }
     let mut server_signals = state.server_signals.clone();
-    let signal = server_signals.get_signal::<ServerSignal<i32>>("counter".to_string()).await.unwrap();
+    let signal = server_signals.get_signal::<ReadOnlySignal<i32>>("counter").unwrap();
     signal.update(|x| {
         *x += 1;
     });
@@ -231,7 +231,7 @@ use axum::extract::FromRef;
 #[derive(FromRef, Clone)]
 pub struct AppState {
     pub options: LeptosOptions,
-    pub server_signals: ServerSignals,
+    pub server_signals: WsSignals,
     pub routes: Option<Vec<AxumRouteListing>>,
     pub orders: Orders,
     pub config: ConfigState,
