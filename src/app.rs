@@ -1,4 +1,5 @@
 use std::net::IpAddr;
+use strum::IntoEnumIterator;
 
 use crate::error_template::{AppError, ErrorTemplate};
 use crate::{PendingCode, QuickUser};
@@ -17,7 +18,6 @@ use rand::distr::slice::Choose;
 use rand::distr::{Distribution, Uniform};
 use serde::Deserialize;
 use serde::Serialize;
-use strum::IntoEnumIterator;
 use time::macros::format_description;
 use time::{OffsetDateTime, UtcOffset};
 use uuid::Uuid;
@@ -51,11 +51,11 @@ pub fn App() -> impl IntoView {
                     outside_errors.insert_with_default_key(AppError::NotFound);
                     view! { <ErrorTemplate outside_errors /> }.into_any()
                 }>
-                    <Route 
-                    path=path!("") 
+                    <Route
+                    path=path!("")
         view=ListAllPlacesWithActiveOrders />
-                    <Route 
-                    path=path!("by-ip/:ip") 
+                    <Route
+                    path=path!("by-ip/:ip")
                     view=GetByIP />
                     <Route path=path!("by-alias/:alias") view=GetByAlias />
                 </Routes>
@@ -222,7 +222,7 @@ fn GetByAlias() -> impl IntoView {
                                             <thead>
                                                 <tr>
                                                     <th>Id</th>
-                                                    <th>status</th>
+                                                    <th>completionEvent</th>
                                                     <th>time</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -543,12 +543,10 @@ fn RenderOrder(
 pub async fn get_orders(
     ip: IpAddr,
 ) -> Result<(Vec<QuickUser>, Vec<(OffsetDateTime, Uuid)>), ServerFnError> {
-    let orders = use_context::<crate::Orders>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
-    })?;
-    let config = use_context::<crate::ConfigState>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("config missing.".into())
-    })?;
+    let orders =
+        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
+    let config =
+        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let quick_users = &config.0.quick_users.clone().unwrap_or_default();
     let ord = orders.0.lock().unwrap();
@@ -559,12 +557,10 @@ pub async fn get_orders(
 pub async fn get_orders_by_alias(
     alias: String,
 ) -> Result<(Vec<QuickUser>, Vec<(OffsetDateTime, Uuid)>), ServerFnError> {
-    let orders = use_context::<crate::Orders>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
-    })?;
-    let config = use_context::<crate::ConfigState>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("config missing.".into())
-    })?;
+    let orders =
+        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
+    let config =
+        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let quick_users = &config.quick_users.clone().unwrap_or_default();
     let ord = orders.lock().unwrap();
@@ -586,9 +582,8 @@ pub async fn get_orders_by_alias(
 
 #[server]
 pub async fn get_first_and_lastname_options() -> Result<(Vec<String>, Vec<String>), ServerFnError> {
-    let config = use_context::<crate::ConfigState>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("config missing.".into())
-    })?;
+    let config =
+        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let first_names = config.first_names.clone().unwrap_or_default().to_vec();
     let last_names = config.last_names.clone().unwrap_or_default().to_vec();
@@ -597,9 +592,8 @@ pub async fn get_first_and_lastname_options() -> Result<(Vec<String>, Vec<String
 }
 #[server]
 pub async fn get_aliases() -> Result<Vec<String>, ServerFnError> {
-    let config = use_context::<crate::ConfigState>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("config missing.".into())
-    })?;
+    let config =
+        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let aliases = config.aliases.as_ref().cloned().unwrap_or_default();
 
@@ -608,12 +602,10 @@ pub async fn get_aliases() -> Result<Vec<String>, ServerFnError> {
 }
 #[server]
 pub async fn get_ips() -> Result<Vec<IpEntry>, ServerFnError> {
-    let orders = use_context::<crate::Orders>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
-    })?;
-    let config = use_context::<crate::ConfigState>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("config missing.".into())
-    })?;
+    let orders =
+        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
+    let config =
+        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let ord = orders.lock().unwrap();
     let ips = ord.get_ips();
@@ -642,9 +634,8 @@ pub enum IpEntry {
 
 #[server]
 pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), ServerFnError> {
-    let orders = use_context::<crate::Orders>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
-    })?;
+    let orders =
+        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
 
     let count = ReadOnlySignal::new("counter", 9).unwrap();
 
@@ -668,9 +659,8 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
 }
 #[server]
 pub async fn update_pending_status(id: Uuid, status: PendingCode) -> Result<(), ServerFnError> {
-    let orders = use_context::<crate::Orders>().ok_or_else(|| {
-        ServerFnError::<server_fn::error::NoCustomError>::ServerError("Orders missing.".into())
-    })?;
+    let orders =
+        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
     let mut ord = orders.lock().unwrap();
     ord.set_pending_status(id, status);
 

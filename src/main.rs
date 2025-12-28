@@ -1,4 +1,6 @@
-use bankid_mock::{app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData};
+use bankid_mock::{
+    app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData,
+};
 #[cfg(feature = "ssr")]
 use leptos_ws::WsSignals;
 #[cfg(feature = "ssr")]
@@ -13,10 +15,11 @@ use axum::{
     response::IntoResponse,
 };
 #[cfg(feature = "ssr")]
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
+#[cfg(feature = "ssr")]
+use bankid_mock::Config;
+#[cfg(feature = "ssr")]
+use bankid_mock::OrderData;
 #[cfg(feature = "ssr")]
 use config::get_configuration;
 #[cfg(feature = "ssr")]
@@ -33,25 +36,21 @@ use leptos_axum::LeptosRoutes;
 #[cfg(feature = "ssr")]
 use leptos_axum::{handle_server_fns_with_context, AxumRouteListing};
 #[cfg(feature = "ssr")]
-use bankid_mock::OrderData;
-#[cfg(feature = "ssr")]
-use bankid_mock::Config;
-#[cfg(feature = "ssr")]
 use leptos_meta::MetaTags;
- use serde::Serialize;
+use serde::Serialize;
 
 #[cfg(feature = "ssr")]
 use axum::Json;
-use serde::Deserialize;
 #[cfg(feature = "ssr")]
 use leptos_axum::generate_route_list;
+use serde::Deserialize;
 
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
     use std::net::SocketAddr;
 
-    use axum_client_ip::{ClientIp, ClientIpSource};
+    use axum_client_ip::ClientIpSource;
     use leptos_ws::WsSignals;
 
     pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -131,11 +130,13 @@ async fn main() {
     // Alternately a file can be specified such as Some("Cargo.toml")
     // The file would need to be included with the executable when moved to deployment
     let addr = leptos_options.site_addr;
-    let routes = generate_route_list(
-        App,
-    );    state.routes = Some(routes.clone());
+    let routes = generate_route_list(App);
+    state.routes = Some(routes.clone());
     let app = Router::new()
-        .route("/api/{*fn_name}", get(server_fn_handler).post(server_fn_handler))
+        .route(
+            "/api/{*fn_name}",
+            get(server_fn_handler).post(server_fn_handler),
+        )
         .route("/rp/v6.0/auth", axum::routing::post(auth))
         .route("/rp/v6.0/collect", axum::routing::post(collect))
         .leptos_routes_with_handler(routes, get(leptos_routes_handler))
@@ -164,14 +165,16 @@ async fn auth(
 
     let uid = uuid::Uuid::new_v4();
     let ip = insecure_ip.0;
-{
-    let mut guard = state.orders.lock().unwrap();
+    {
+        let mut guard = state.orders.lock().unwrap();
 
-    guard.insert_empty(uid, ip);
-    drop(guard);
+        guard.insert_empty(uid, ip);
+        drop(guard);
     }
     let mut server_signals = state.server_signals.clone();
-    let signal = server_signals.get_signal::<ReadOnlySignal<i32>>("counter").unwrap();
+    let signal = server_signals
+        .get_signal::<ReadOnlySignal<i32>>("counter")
+        .unwrap();
     signal.update(|x| {
         *x += 1;
     });
@@ -250,7 +253,7 @@ pub struct AuthResponse {
 #[serde(untagged)]
 pub enum HintCodes {
     Pending(PendingCode),
-    Failed(FailedHintCodes) 
+    Failed(FailedHintCodes),
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -273,8 +276,7 @@ pub struct CompletionData {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FailedHintCodes {
-ExpiredTransaction
-
+    ExpiredTransaction,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -296,4 +298,3 @@ pub fn main() {
     // unless we want this to work with e.g., Trunk for a purely client-side app
     // see lib.rs for hydration function instead
 }
-
