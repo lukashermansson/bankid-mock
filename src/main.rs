@@ -1,12 +1,3 @@
-use bankid_mock::{
-    app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData,
-};
-#[cfg(feature = "ssr")]
-use leptos_ws::WsSignals;
-#[cfg(feature = "ssr")]
-pub mod fileserv;
-#[cfg(feature = "ssr")]
-use crate::fileserv::file_and_error_handler;
 #[cfg(feature = "ssr")]
 use axum::response::Response as AxumResponse;
 #[cfg(feature = "ssr")]
@@ -20,6 +11,9 @@ use axum::{routing::get, Router};
 use bankid_mock::Config;
 #[cfg(feature = "ssr")]
 use bankid_mock::OrderData;
+use bankid_mock::{
+    app::App, ConfigState, DeviceCompletionData, Orders, PendingCode, UserCompletionData,
+};
 #[cfg(feature = "ssr")]
 use config::get_configuration;
 #[cfg(feature = "ssr")]
@@ -37,6 +31,8 @@ use leptos_axum::LeptosRoutes;
 use leptos_axum::{handle_server_fns_with_context, AxumRouteListing};
 #[cfg(feature = "ssr")]
 use leptos_meta::MetaTags;
+#[cfg(feature = "ssr")]
+use leptos_ws::WsSignals;
 use serde::Serialize;
 
 #[cfg(feature = "ssr")]
@@ -45,6 +41,24 @@ use axum::Json;
 use leptos_axum::generate_route_list;
 use serde::Deserialize;
 
+pub fn shell(options: LeptosOptions) -> impl IntoView {
+    view! {
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+                <MetaTags />
+                <AutoReload options=options.clone() />
+                <HydrationScripts options=options />
+            </head>
+            <body>
+                <App />
+            </body>
+        </html>
+    }
+}
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
@@ -52,26 +66,6 @@ async fn main() {
 
     use axum_client_ip::ClientIpSource;
     use leptos_ws::WsSignals;
-
-    pub fn shell(options: LeptosOptions) -> impl IntoView {
-        view! {
-            <!DOCTYPE html>
-            <html lang="en">
-                <head>
-                    <meta charset="utf-8" />
-                    <meta name="viewport" content="width=device-width, initial-scale=1" />
-                    <link rel="stylesheet" href="pkg/axum_example.css" />
-
-                    <MetaTags />
-                    <AutoReload options=options.clone() />
-                    <HydrationScripts options=options />
-                </head>
-                <body>
-                    <App />
-                </body>
-            </html>
-        }
-    }
 
     async fn leptos_routes_handler(state: State<AppState>, req: Request) -> AxumResponse {
         let state1 = state.0.clone();
@@ -132,6 +126,7 @@ async fn main() {
     let addr = leptos_options.site_addr;
     let routes = generate_route_list(App);
     state.routes = Some(routes.clone());
+    let state2 = state.clone();
     let app = Router::new()
         .route(
             "/api/{*fn_name}",
@@ -140,8 +135,19 @@ async fn main() {
         .route("/rp/v6.0/auth", axum::routing::post(auth))
         .route("/rp/v6.0/collect", axum::routing::post(collect))
         .leptos_routes_with_handler(routes, get(leptos_routes_handler))
+        .fallback(leptos_axum::file_and_error_handler_with_context::<
+            AppState,
+            _,
+        >(
+            move || {
+                provide_context(state2.options.clone());
+                provide_context(state2.config.clone());
+                provide_context(state2.orders.clone());
+                provide_context(state2.server_signals.clone());
+            },
+            shell,
+        ))
         .layer(ClientIpSource::ConnectInfo.into_extension())
-        .fallback(file_and_error_handler)
         .with_state(state);
     // run our app with hyper
     // `axum::Server` is a re-export of `hyper::Server`

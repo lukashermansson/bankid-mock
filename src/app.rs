@@ -181,7 +181,6 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn GetByAlias() -> impl IntoView {
-    leptos_ws::provide_websocket();
     let count = ReadOnlySignal::new("counter", 1).unwrap();
     let params = use_params_map();
     let alias = move || params.with(|params| params.get("alias").unwrap_or_default());
@@ -590,10 +589,10 @@ pub async fn get_first_and_lastname_options() -> Result<(Vec<String>, Vec<String
 
     Ok((first_names, last_names))
 }
-#[server]
+#[server(GetAlias, "/api")]
 pub async fn get_aliases() -> Result<Vec<String>, ServerFnError> {
-    let config =
-        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
+    let config = use_context::<crate::ConfigState>()
+        .ok_or_else(|| ServerFnError::new("Config missing p."))?;
 
     let aliases = config.aliases.as_ref().cloned().unwrap_or_default();
 
