@@ -1456,8 +1456,7 @@ dependencies = [
 [[package]]
 name = "leptos_ws"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42fc0cd831fe6a5d169125cb6f4de1c606bda40ef2af2fc9f7b77f29014b28d"
+source = "git+https://github.com/lukashermansson/leptos_ws.git?branch=make-it-possible-to-create-signals-from-where-leptos-context-is-unavialable#632d6254ba8f7ef834cb3330418f679fa3d96e5c"
 dependencies = [
  "async-trait",
  "dashmap",

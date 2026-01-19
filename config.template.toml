@@ -8,14 +8,6 @@ last-names = [
     "Specimin",
 ]
 
-[[aliases]]
-ip = "127.0.0.1"
-name = "Localhost"
-
-[[aliases]]
-ip = "127.0.0.2"
-name = "Prod"
-
 [[quick-users]]
 label = "test"
 ssn = "201604064188"

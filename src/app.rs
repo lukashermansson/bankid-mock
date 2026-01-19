@@ -2,9 +2,8 @@ use std::net::IpAddr;
 use strum::IntoEnumIterator;
 
 use crate::error_template::{AppError, ErrorTemplate};
-use crate::{PendingCode, QuickUser};
+use crate::{OrderData, PendingCode, QuickUser};
 use codee::string::JsonSerdeCodec;
-use itertools::Itertools;
 use js_sys::Date;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -57,7 +56,6 @@ pub fn App() -> impl IntoView {
                     <Route
                     path=path!("by-ip/:ip")
                     view=GetByIP />
-                    <Route path=path!("by-alias/:alias") view=GetByAlias />
                 </Routes>
             </main>
         </Router>
@@ -71,7 +69,6 @@ pub fn App() -> impl IntoView {
 
 #[component]
 fn Navbar() -> impl IntoView {
-    let aliases = Resource::new(|| (), |_| async move { get_aliases().await });
 
     view! {
         <Transition>
@@ -91,30 +88,7 @@ fn Navbar() -> impl IntoView {
                     >
                         <span class="navbar-toggler-icon"></span>
                     </button>
-                    <div class="collapse navbar-collapse" id="navbarScroll">
-                        <ul class="navbar-nav me-auto my-2 my-lg-0">
-                            {move || {
-                                aliases
-                                    .get()
-                                    .map(|o| {
-                                        o.unwrap()
-                                            .into_iter()
-                                            .map(|n| {
-                                                view! {
-                                                    <li class="nav-item">
-                                                        <A href=format!("/by-alias/{}", n) {..} class="nav-link">
-                                                            {n}
-                                                        </A>
-                                                    </li>
-                                                }
-                                            })
-                                            .collect_view()
-                                    })
-                            }}
-
-                        </ul>
-                    </div>
-                </div>
+                                    </div>
             </nav>
         </Transition>
     }
@@ -122,18 +96,14 @@ fn Navbar() -> impl IntoView {
 
 #[component]
 fn ListAllPlacesWithActiveOrders() -> impl IntoView {
-    let count = ReadOnlySignal::new("counter", 1).unwrap();
-
-    let count = move || count.get();
-    let ips = Resource::new(count, |_| get_ips());
+    let items = ReadOnlySignal::new("items", OrderData::new()).unwrap();
+    let item_data = Signal::derive(move || {
+        items.get().get_ips()
+    });
 
     view! {
         <Suspense>
             <div>
-                {move || {
-                    ips.get()
-                        .map(|o| {
-                            view! {
                                 <table class="table">
                                     <thead>
                                         <tr>
@@ -141,13 +111,12 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {o
-                                            .unwrap()
-                                            .into_iter()
-                                            .map(|n| match n {
-                                                IpEntry::JustIp(n) => {
-                                                    view! {
-                                                        <tr>
+<For 
+                                                    each=move || item_data.get()
+                                                    key=|n| n.to_string()
+                                                    children=move |n| {
+                                                        view! {
+                                                            <tr>
                                                             <td>
                                                                 <A href=format!(
                                                                     "/by-ip/{}",
@@ -155,41 +124,45 @@ fn ListAllPlacesWithActiveOrders() -> impl IntoView {
                                                                 )>{n.to_string()}</A>
                                                             </td>
                                                         </tr>
+                                                        }
                                                     }
-                                                }
-                                                IpEntry::Alias(alias) => {
-                                                    view! {
-                                                        <tr>
-                                                            <td>
-                                                                <A href=format!("/by-alias/{}", alias)>{alias}</A>
-                                                            </td>
-                                                        </tr>
-                                                    }
-                                                }
-                                            })
-                                            .collect_view()}
-                                    </tbody>
+                                                />
+
+                                                                            
+                                                    </tbody>
                                 </table>
-                            }
-                        })
-                }}
 
             </div>
         </Suspense>
     }
 }
+
+
 /// Renders the home page of your application.
 #[component]
-fn GetByAlias() -> impl IntoView {
-    let count = ReadOnlySignal::new("counter", 1).unwrap();
+fn GetByIP() -> impl IntoView {
+    let items = ReadOnlySignal::new("items", OrderData::new()).unwrap();
     let params = use_params_map();
-    let alias = move || params.with(|params| params.get("alias").unwrap_or_default());
-    let count = move || count.get();
-    let orders = Resource::new(
-        move || (alias(), count()),
-        |(alias, _count)| get_orders_by_alias(alias),
+    let ip = move || {
+        params.with(|params| {
+            params
+                .get("ip")
+                .unwrap_or_default()
+                .parse::<IpAddr>()
+                .unwrap()
+        })
+    };
+    let first_and_lastnames = Resource::new(
+        || (),
+        |_| async move { get_first_and_lastname_options().await },
     );
-    let first_and_lastnames = Resource::new(move || (), |_| get_first_and_lastname_options());
+
+    let quick_users = Resource::new(move || (), |_| get_quick_users());
+
+
+    let item_data = Signal::derive(move || {
+        items.get().get_all_pending().iter().filter(|(_k, v)| v.ip == ip()).map(|o| (o.0.clone(), o.1.clone())).collect::<Vec<_>>()
+    });
 
     view! {
         <Suspense>
@@ -209,13 +182,14 @@ fn GetByAlias() -> impl IntoView {
                             .map(|k| k.unwrap().1)
                             .unwrap_or_default()
                     });
-                    orders
-                        .get()
-                        .map(|order| {
-                            match order {
-                                Ok(o) => {
-                                    let quick_users = Signal::derive(move || o.0.clone());
-                                    view! {
+                let quick_users = Signal::derive(move || {
+                        quick_users
+                            .get()
+                            .map(|p| p)
+                            .map(|k| k.unwrap())
+                            .unwrap_or_default()
+                    });
+                                                        view! {
                                         <table class="table">
 
                                             <thead>
@@ -227,119 +201,24 @@ fn GetByAlias() -> impl IntoView {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {o
-                                                    .1
-                                                    .iter()
-                                                    .sorted_by(|a, b| Ord::cmp(&a.0, &b.0).reverse())
-                                                    .map(|n| {
+                                                <For 
+                                                    each=move || item_data.get()
+                                                    key=|n| n.0
+                                                    children=move |count| {
                                                         view! {
                                                             <RenderOrder
-                                                                id=n.1
-                                                                time=n.0
+                                                                id=count.0.clone()
+                                                                time=count.1.order_time
                                                                 quick_users=quick_users
                                                                 first_names=firstnames
                                                                 last_names=lastnames
                                                             />
                                                         }
-                                                    })
-                                                    .collect_view()}
+                                                    }
+                                                />
                                             </tbody>
                                         </table>
-                                    }
-                                        .into_any()
-                                }
-                                Err(o) => view! { <p>{o.to_string()}</p> }.into_any(),
-                            }
-                        })
-                }}
-
-            </div>
-        </Suspense>
-    }
-}
-
-/// Renders the home page of your application.
-#[component]
-fn GetByIP() -> impl IntoView {
-    let count = ReadOnlySignal::new("counter", 0).unwrap();
-    let params = use_params_map();
-    let ip = move || {
-        params.with(|params| {
-            params
-                .get("ip")
-                .unwrap_or_default()
-                .parse::<IpAddr>()
-                .unwrap()
-        })
-    };
-    let count = move || count.get();
-    let orders_resource = Resource::new(move || (ip(), count()), |(ip, _count)| get_orders(ip));
-    let first_and_lastnames = Resource::new(
-        || (),
-        |_| async move { get_first_and_lastname_options().await },
-    );
-
-    view! {
-        <Suspense>
-            <div>
-                {move || {
-                    let firstnames = Signal::derive(move || {
-                        first_and_lastnames
-                            .get()
-                            .map(|p| p)
-                            .map(|k| k.unwrap().0)
-                            .unwrap_or_default()
-                    });
-                    let lastnames = Signal::derive(move || {
-                        first_and_lastnames
-                            .get()
-                            .map(|p| p)
-                            .map(|k| k.unwrap().1)
-                            .unwrap_or_default()
-                    });
-                    orders_resource
-                        .get()
-                        .map(|orders| {
-                            match orders {
-                                Ok(o) => {
-                                    let quick_users = Signal::derive(move || o.0.clone());
-                                    view! {
-                                        <table class="table">
-
-                                            <thead>
-                                                <tr>
-                                                    <th>Id</th>
-                                                    <th>status</th>
-                                                    <th>time</th>
-                                                    <th>Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {o
-                                                    .1
-                                                    .iter()
-                                                    .sorted_by(|a, b| Ord::cmp(&a.0, &b.0).reverse())
-                                                    .map(|n| {
-                                                        view! {
-                                                            <RenderOrder
-                                                                id=n.1
-                                                                time=n.0
-                                                                quick_users=quick_users
-                                                                first_names=firstnames
-                                                                last_names=lastnames
-                                                            />
-                                                        }
-                                                    })
-                                                    .collect_view()}
-                                            </tbody>
-                                        </table>
-                                    }
-                                        .into_any()
-                                }
-                                Err(o) => view! { <p>{o.to_string()}</p> }.into_any(),
-                            }
-                        })
-                }}
+                                    }                }}
 
             </div>
         </Suspense>
@@ -360,7 +239,7 @@ fn RenderOrder(
     let (name, set_name) = signal("".to_string());
     let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
     let (offset, set_offset) = use_cookie::<UtcOffset, JsonSerdeCodec>("offset");
-    if offset.get().is_none() {
+    if offset.get_untracked().is_none() {
         (move || set_offset.set(Some(UtcOffset::from_hms(0, 0, 0).unwrap())))();
     }
     Effect::new(move |_| {
@@ -375,7 +254,7 @@ fn RenderOrder(
             <td>{move || id.get().to_string()}</td>
             <td>
                 <form>
-                    <select class="form-select" aria-label="Default select example">
+                    <select class="form-select" id={ id.get().to_string() + "complet"} aria-label="Default select example">
                         {move || {
                             PendingCode::iter()
                                 .map(|i| {
@@ -538,45 +417,17 @@ fn RenderOrder(
     }
 }
 
-#[server(GetOrders, "/api")]
-pub async fn get_orders(
-    ip: IpAddr,
-) -> Result<(Vec<QuickUser>, Vec<(OffsetDateTime, Uuid)>), ServerFnError> {
-    let orders =
-        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
-    let config =
-        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
-    let quick_users = &config.0.quick_users.clone().unwrap_or_default();
-    let ord = orders.0.lock().unwrap();
-    Ok((quick_users.to_vec(), ord.get_all(&ip)))
-}
-
-#[server(GetOrdersByAlias, "/api")]
-pub async fn get_orders_by_alias(
-    alias: String,
-) -> Result<(Vec<QuickUser>, Vec<(OffsetDateTime, Uuid)>), ServerFnError> {
-    let orders =
-        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
+#[server(GetQuickUsers, "/api")]
+pub async fn get_quick_users(
+) -> Result<Vec<QuickUser>, ServerFnError> {
     let config =
         use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
 
     let quick_users = &config.quick_users.clone().unwrap_or_default();
-    let ord = orders.lock().unwrap();
 
-    let orders: Vec<_> = config
-        .aliases
-        .as_ref()
-        .map(|q| {
-            q.iter()
-                .find(|p| p.name == alias)
-                .iter()
-                .flat_map(|p| ord.get_all(&p.ip))
-                .collect()
-        })
-        .unwrap();
 
-    Ok((quick_users.to_vec(), orders))
+    Ok(quick_users.to_vec())
 }
 
 #[server]
@@ -589,41 +440,7 @@ pub async fn get_first_and_lastname_options() -> Result<(Vec<String>, Vec<String
 
     Ok((first_names, last_names))
 }
-#[server(GetAlias, "/api")]
-pub async fn get_aliases() -> Result<Vec<String>, ServerFnError> {
-    let config = use_context::<crate::ConfigState>()
-        .ok_or_else(|| ServerFnError::new("Config missing p."))?;
 
-    let aliases = config.aliases.as_ref().cloned().unwrap_or_default();
-
-    let alias_names = aliases.iter().map(|f| f.name.clone()).collect();
-    Ok(alias_names)
-}
-#[server]
-pub async fn get_ips() -> Result<Vec<IpEntry>, ServerFnError> {
-    let orders =
-        use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
-    let config =
-        use_context::<crate::ConfigState>().ok_or_else(|| ServerFnError::new("Config missing."))?;
-
-    let ord = orders.lock().unwrap();
-    let ips = ord.get_ips();
-    let aliases = config.aliases.as_ref().cloned().unwrap_or_default();
-
-    let ips = ips
-        .iter()
-        .map(|f| {
-            let alias = aliases.iter().find(|p| &p.ip == f);
-            if let Some(alias) = alias {
-                IpEntry::Alias(alias.name.clone())
-            } else {
-                IpEntry::JustIp(f.clone())
-            }
-        })
-        .collect();
-    drop(ord);
-    Ok(ips)
-}
 
 #[derive(Deserialize, Serialize, Clone)]
 pub enum IpEntry {
@@ -636,7 +453,7 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
     let orders =
         use_context::<crate::Orders>().ok_or_else(|| ServerFnError::new("Orders missing."))?;
 
-    let count = ReadOnlySignal::new("counter", 9).unwrap();
+    let items = ReadOnlySignal::new("items", OrderData::new()).unwrap();
 
     let mut ord = orders.lock().unwrap();
     let new_name = name.clone();
@@ -652,8 +469,10 @@ pub async fn complete_order(id: Uuid, ssn: String, name: String) -> Result<(), S
             sur_name: surname.to_string(),
         },
     );
-    count.update(|x| *x += 1);
 
+    items.update(|x| {
+        x.data = ord.data.clone();
+    });
     Ok(())
 }
 #[server]
@@ -670,6 +489,13 @@ pub async fn update_pending_status(id: Uuid, status: PendingCode) -> Result<(), 
 pub struct Count {
     pub value: i32,
 }
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct Item {
+    pub id: Uuid,
+    pub date_time: OffsetDateTime,
+}
+
+
 
 fn generate_random_ssn() -> String {
     let mut rng = rand::rng();

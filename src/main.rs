@@ -102,6 +102,7 @@ async fn main() {
     }
 
     let server_signals = WsSignals::new();
+
     //let signal = ServerSignal::new("counter".to_string(), 1);
     // build our application with a route
     let conf = get_configuration(None).unwrap();
@@ -178,11 +179,10 @@ async fn auth(
         drop(guard);
     }
     let mut server_signals = state.server_signals.clone();
-    let signal = server_signals
-        .get_signal::<ReadOnlySignal<i32>>("counter")
+    let items = ReadOnlySignal::new_with_context(&mut server_signals, "items", OrderData::new())
         .unwrap();
-    signal.update(|x| {
-        *x += 1;
+    items.update(|x| {
+        x.data = state.orders.lock().unwrap().data.clone();
     });
     Json(AuthResponse {
         order_ref: uid.into(),

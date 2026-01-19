@@ -56,22 +56,22 @@ impl Deref for ConfigState {
         &self.0
     }
 }
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Deserialize, Serialize, Debug, Clone)]
 pub struct Order {
     ip: IpAddr,
     order_time: OffsetDateTime,
     data: OrderEnum,
 }
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Deserialize, Serialize, Debug, Clone)]
 pub enum OrderEnum {
     Pending(PendingData),
     Completed(UserCompletionData),
     Expired,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OrderData {
-    data: HashMap<uuid::Uuid, Order>,
+    pub data: HashMap<uuid::Uuid, Order>,
 }
 use itertools::Itertools;
 impl OrderData {
@@ -137,12 +137,11 @@ impl OrderData {
 
         return (old_count - new_count).try_into().unwrap();
     }
-    pub fn get_all(&self, ip: &IpAddr) -> Vec<(OffsetDateTime, Uuid)> {
+
+    pub fn get_all_pending(&self) -> Vec<(&Uuid, &Order)> {
         self.data
             .iter()
             .filter(|o| matches!(o.1.data, OrderEnum::Pending(_)))
-            .filter(|o| &o.1.ip == ip)
-            .map(|o| (o.1.order_time.clone(), o.0.clone()))
             .collect()
     }
 }
@@ -158,7 +157,7 @@ impl Clone for ConfigState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PendingData {
     pub status: PendingCode,
 }
@@ -173,7 +172,7 @@ pub enum PendingCode {
     NoClient,
     OutstandingTransaction,
 }
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserCompletionData {
     pub personal_number: String,
@@ -189,7 +188,6 @@ pub struct DeviceCompletionData {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    pub aliases: Option<Vec<Alias>>,
     pub quick_users: Option<Vec<QuickUser>>,
     pub first_names: Option<Vec<String>>,
     pub last_names: Option<Vec<String>>,

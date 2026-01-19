@@ -34,7 +34,7 @@ rkyv = { version = "0.8" }
 codee = {version = "0.3", features= ["json_serde_wasm"]}
 getrandom = { version = "=0.3.4", features = ["wasm_js"] }  # Use latest 0.3.x instead of 0.2.8
 leptos-use = { version= "0.17.0" }
-leptos_ws = "0.9.1"
+leptos_ws = {git = "https://github.com/lukashermansson/leptos_ws.git", branch = "make-it-possible-to-create-signals-from-where-leptos-context-is-unavialable" }
 
 [features]
 hydrate = ["leptos/hydrate", "leptos_ws/hydrate"]
